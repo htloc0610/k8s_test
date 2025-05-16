@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: genai-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: genai-service
+  template:
+    metadata:
+      labels:
+        app: genai-service
+    spec:
+      initContainers:
+        - name: wait-for-discovery-server
+          image: busybox
+          command:
+            - "sh"
+            - "-c"
+            - "until nc -z -v -w30 discovery-server 8761; do echo waiting for discovery-server; sleep 2; done;"
+      containers:
+        - name: genai-service
+          image: anwirisme/spring-petclinic-genai-service:main
+          ports:
+            - containerPort: 8084
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: http://discovery-server:8761/eureka/
+            - name: SPRING_ZIPKIN_TRACING_ENDPOINT
+              value: http://tracing-server:9411/api/v2/spans
+            - name: SPRING_APPLICATION_NAME
+              value: genai-service
+            - name: SPRING_APPLICATION_INSTANCE_ID
+              value: ${spring.application.name}:${random.uuid}
+            - name: CONFIG_SERVER_URL
+              value: http://config-server:8888
+            - name: AZURE_OPENAI_KEY
+              value: ${AZURE_OPENAI_KEY:your_default_azure_key}
+            - name: AZURE_OPENAI_ENDPOINT
+              value: ${AZURE_OPENAI_ENDPOINT:http://default-azure-endpoint}
+            - name: OPENAI_API_KEY
+              value: test
+            - name: EUREKA_INSTANCE_HOSTNAME
+              value: genai-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: genai-service
+spec:
+  selector:
+    app: genai-service
+  ports:
+    - port: 8084
+      targetPort: 8084

@@ -1,0 +1,52 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      initContainers:
+        - name: wait-for-discovery-server
+          image: busybox
+          command:
+            - "sh"
+            - "-c"
+            - "until nc -z -v -w30 discovery-server 8761; do echo waiting for discovery-server; sleep 2; done;"
+      containers:
+        - name: api-gateway
+          image: anwirisme/spring-petclinic-api-gateway:main
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: EUREKA_CLIENT_SERVICEURL_DEFAULTZONE
+              value: http://discovery-server:8761/eureka/
+            - name: SPRING_APPLICATION_NAME
+              value: api-gateway
+            - name: SPRING_APPLICATION_INSTANCE_ID
+              value: api-gateway:${HOSTNAME}
+            - name: CONFIG_SERVER_URL
+              value: http://config-server:8888
+            - name: EUREKA_INSTANCE_HOSTNAME
+              value: api-gateway
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+spec:
+  selector:
+    app: api-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080
+  type: NodePort
